@@ -14,13 +14,16 @@ const logger_middleware = (req: express.Request, res: express.Response, next: ex
     const date = moment(new Date()).format('YYYY.MM.DD hh:mm:ss')
     const method = req.method
     const url = req.url
-    const status = res.statusCode
+    
     const start = process.hrtime();
     const durationInMilliseconds = getActualRequestDurationInMilliseconds(start);
     const ip = req.ip
-    const log = chalk.green(`[${date}] ${method}: ${url} from ${ip} => ${status} -- ${durationInMilliseconds} ms`)
-    console.log(log)
-    next()
+    res.once('finish', () => {
+      const status = res.statusCode
+      const log = chalk.green(`[${date}] ${method}: ${url} from ${ip} => ${status} -- ${durationInMilliseconds} ms`)
+      console.log(log)
+    })
+    return next()
 }
 
 export default logger_middleware

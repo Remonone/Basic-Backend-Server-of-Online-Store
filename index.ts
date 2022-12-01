@@ -3,6 +3,7 @@ import { MongoClient } from 'mongodb'
 import server from './src/server'
 import dotenv from 'dotenv'
 import { collections } from './src/data/collections'
+import Order from './src/modules/Order'
 
 dotenv.config()
 
