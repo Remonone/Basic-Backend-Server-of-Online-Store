@@ -1,10 +1,12 @@
 import { Router } from "express"
-import { MongoInvalidArgumentError, ObjectId } from "mongodb"
+import { ObjectId } from "mongodb"
+import {BSONTypeError} from 'bson'
 import { collections } from "../data/collections"
 import Order from "../modules/Order"
 import Product from "../modules/Product"
 import User from "../modules/User"
 import { convertToken } from "../utils/jwt"
+
 const orders = Router()
 
 orders.get('/:id', async(req, res) => {
@@ -20,12 +22,15 @@ orders.get('/:id', async(req, res) => {
 orders.post('', async (req, res) => {
     const {address, webToken, products} = req.body
     if(!(!!address && !!webToken && (products.length > 0))) return res.status(400).json({message: "Invalid body"})
+
     const data = convertToken(webToken)
     const user = (await collections.users?.findOne({email: data.email})) as unknown as User
-    const query = products.map((item: Order) => new ObjectId(item.id))
-    if(query.length !== products.length || query.length < 1) return res.status(400).json({message: "Invalid body"})
+
     try{
+        const query = products.map((item: Order) => new ObjectId(item.id))
         const prods = (await collections.products?.find({ _id : { $in :query } }).toArray()) as unknown as Product[]
+
+        if(prods.length < 1) return res.status(404).json({message: "No Products was found"})
         const orderProducts = prods.map((item, index) => {
             const product:{product:Product, count: number} = {
                 product: item,
@@ -37,10 +42,14 @@ orders.post('', async (req, res) => {
         const result = await collections.orders?.insertOne(order)
         return res.status(200).json({result})
     } catch(e) {
-        if(e instanceof MongoInvalidArgumentError){
-            return res.status(500).json({message: "Product(s) undefined"})
-        }
-        return res.status(500).json({message: "Unhandled server error"})
+        switch(true){
+            case e instanceof BSONTypeError: 
+                res.status(400).json({message: "Invalid Product Id"})
+                throw new Error("Invalid Product Id")
+            default: 
+                res.status(500).json({message: "Unhandled server error"})
+                throw new Error("Unhandled server error")
+        }  
     }
 })
 
@@ -48,13 +57,14 @@ orders.put('/editOrder', async (req, res) => {
     const {jwtToken, order_id, products, address} = req.body
     if(!(!!jwtToken && !!order_id && (!!products || !!address))) return res.status(400).json("Invalid body")
     const data = convertToken(jwtToken)
-    const order = (await collections.orders?.findOne({_id: new ObjectId(order_id), user: {email: data.email}})) as unknown as Order
+    const _id = new ObjectId(order_id)
+    const order = (await collections.orders?.findOne({_id, user: {email: data.email}})) as unknown as Order
     if(!order) return res.status(403).json({message: "Forbidden"})
     const query: any = {}
     if(products) query['products'] = products
     if(address) query['address'] = address
     try{
-        const result = await collections.orders?.updateOne({id: order_id}, query)
+        const result = await collections.orders?.updateOne({_id}, query)
         return res.status(200).json({result})
     }catch(e) {
         return res.status(500).json({message: e})

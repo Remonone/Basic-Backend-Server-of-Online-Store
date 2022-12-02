@@ -35,7 +35,15 @@ users.get('/login', async (req, res) => {
     } catch(e) {
         return res.status(500).json({message: "Internal server error."})
     }
-    
+})
+
+users.get('/profile', async (req, res) => {
+    const {webToken} = req.body
+    const data = convertToken(webToken)
+    const query = {email: data.email}
+    const user = (await collections.users?.findOne(query)) as unknown as User
+    if(!user) return res.status(401).json({message: "Unauthorized"})
+    return res.status(200).json(user)
 })
 
 users.get('/:id', async (req, res) => {
