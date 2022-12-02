@@ -1,10 +1,13 @@
 import jwt from "jsonwebtoken";
+import dotenv from 'dotenv'
+
+dotenv.config()
 
 const jwtKey = process.env.JWT_SECRET_KEY as string
 const jwtExpires = process.env.JWT_EXPIRES as string
 
 
-export const getToken = (data: {}): string => {
+export const getToken = (data: object): string => {
     const token = jwt.sign(data, jwtKey, {
         algorithm: "HS256",
         expiresIn: parseInt(jwtExpires)

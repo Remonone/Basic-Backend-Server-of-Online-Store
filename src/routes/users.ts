@@ -3,20 +3,16 @@ import { collections } from "../data/collections";
 import bcrypt from 'bcrypt'
 import User from "../modules/User";
 import { convertToken, getToken } from "../utils/jwt";
+import { ObjectId } from "mongodb";
 
 const users = Router()
 
-users.get('', (req, res) => {
+users.get('', async (req, res) => {
     const {name, email} = req.query
-    const result = collections.users?.find({name, email}).toArray()
-    return res.status(200).json(result)
-})
-
-users.get('/:id', (req, res) => {
-    const { id } = req.params
-    const query = {id}
-    const result = collections.users?.find(query).toArray()
-    if(!!result) return res.status(404).json({message: 'User was not found'})
+    const query: any = {}
+    if(name) query['name'] = name
+    if(email) query['email'] = email
+    const result = await collections.users?.find(query).toArray()
     return res.status(200).json(result)
 })
 
@@ -28,17 +24,26 @@ users.get('/login', async (req, res) => {
         const user = (await collections.users?.findOne(query)) as unknown as User
         if(!user) return res.status(401).json({message: "Unauthorized"})
         if(bcrypt.compareSync(password, user.password)){
-            const jwt = getToken({
+            const data = {
                 name: user.name,
                 email: user.email
-            })
+            }
+            const jwt = getToken(data)
             return res.status(200).json({webToken: jwt})
         }
         return res.status(401).json({message: "Unauthorized"})
     } catch(e) {
-        res.status(500).json({message: e})
+        return res.status(500).json({message: "Internal server error."})
     }
     
+})
+
+users.get('/:id', async (req, res) => {
+    const { id } = req.params
+    const query = {_id: new ObjectId(id)}
+    const result = await collections.users?.findOne(query)
+    if(!result) return res.status(404).json({message: 'User was not found'})
+    return res.status(200).json(result)
 })
 
 users.post('/register', async (req, res) => {
@@ -46,7 +51,9 @@ users.post('/register', async (req, res) => {
     if(!(!!email && !!password && !!name)) return res.status(400).json({message: 'Invalid Body'})
     const saltRounds = 10
     const hashed_password = bcrypt.hashSync(password, saltRounds)
-    const query = {email, hashed_password, name}
+    const user = (await collections.users?.findOne({email})) as unknown as User
+    if(user) return res.status(400).json({message: "User already exist"})
+    const query = {email, password: hashed_password, name}
     collections.users?.insertOne(query)
     .catch((e) => {
         return res.status(500).json(e)
